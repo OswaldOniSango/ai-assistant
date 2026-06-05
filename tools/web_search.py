@@ -38,6 +38,26 @@ def search_web(query: str) -> list[dict[str, str]]:
     return [_normalize_result(result) for result in raw_results]
 
 
+def build_search_context(results: list[dict[str, str]]) -> str:
+    """Convierte resultados web en un bloque textual para el modelo."""
+    if not results:
+        return "No se encontraron resultados web relevantes."
+
+    context_blocks: list[str] = []
+    for index, result in enumerate(results, start=1):
+        title = result.get("title", "").strip() or "Sin título"
+        url = result.get("url", "").strip() or "Sin URL"
+        snippet = result.get("snippet", "").strip() or "Sin resumen disponible."
+        context_blocks.append(
+            f"[Fuente {index}]\n"
+            f"Título: {title}\n"
+            f"URL: {url}\n"
+            f"Snippet: {snippet}"
+        )
+
+    return "\n\n".join(context_blocks)
+
+
 def _normalize_result(result: dict[str, Any]) -> dict[str, str]:
     return {
         "title": str(result.get("title", result.get("Heading", ""))).strip(),
