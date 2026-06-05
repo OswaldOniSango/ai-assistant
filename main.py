@@ -1,6 +1,10 @@
 """Punto de entrada del asistente local."""
 
-from llm.qwen_runner import QwenRunner
+from __future__ import annotations
+
+import sys
+
+from llm.qwen_runner import QwenRunner, ask_model
 from tools.web_search import WebSearchTool
 
 
@@ -11,7 +15,7 @@ class LocalAIAssistant:
         self.model = QwenRunner()
         self.web_search = WebSearchTool()
 
-    def run(self) -> None:
+    def run_interactive(self) -> None:
         print("Local AI Assistant")
         print("Escribe 'salir' para terminar.\n")
 
@@ -35,6 +39,18 @@ class LocalAIAssistant:
             print(f"Asistente: {response}")
 
 
-if __name__ == "__main__":
+def main(argv: list[str] | None = None) -> int:
+    args = argv if argv is not None else sys.argv
+
+    if len(args) >= 3 and args[1] == "chat":
+        prompt = " ".join(args[2:]).strip()
+        print(ask_model(prompt))
+        return 0
+
     app = LocalAIAssistant()
-    app.run()
+    app.run_interactive()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

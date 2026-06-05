@@ -1,2 +1,1 @@
-# Dependencias externas del proyecto.
-# Esta base inicial no requiere paquetes adicionales.
+llama-cpp-python
