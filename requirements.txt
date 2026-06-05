@@ -1,2 +1,2 @@
 llama-cpp-python
-duckduckgo-search
+lxml
