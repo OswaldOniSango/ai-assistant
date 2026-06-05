@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import sys
 
 from llm.qwen_runner import QwenRunner, ask_model
-from tools.web_search import WebSearchTool
+from tools.web_search import WebSearchTool, search_web
 
 
 class LocalAIAssistant:
@@ -32,7 +33,7 @@ class LocalAIAssistant:
             if user_message.lower().startswith("buscar "):
                 query = user_message[7:].strip()
                 tool_result = self.web_search.search(query)
-                print(f"Asistente: {tool_result}")
+                print(_format_search_results(tool_result))
                 continue
 
             response = self.model.generate(user_message)
@@ -47,9 +48,21 @@ def main(argv: list[str] | None = None) -> int:
         print(ask_model(prompt))
         return 0
 
+    if len(args) >= 3 and args[1] == "search":
+        query = " ".join(args[2:]).strip()
+        print(_format_search_results(search_web(query)))
+        return 0
+
     app = LocalAIAssistant()
     app.run_interactive()
     return 0
+
+
+def _format_search_results(results: list[dict[str, str]]) -> str:
+    if not results:
+        return "No se encontraron resultados."
+
+    return json.dumps(results, ensure_ascii=False, indent=2)
 
 
 if __name__ == "__main__":
