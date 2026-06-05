@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import sys
+from dataclasses import asdict
 
+from llm.context_builder import build_search_context
 from llm.qwen_runner import QwenRunner, ask_model
-from tools.web_search import WebSearchTool, build_search_context, search_web
+from tools.web_search import SearchResult, WebSearchTool, search_web
 
 
 class LocalAIAssistant:
@@ -68,11 +70,15 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _format_search_results(results: list[dict[str, str]]) -> str:
+def _format_search_results(results: list[SearchResult]) -> str:
     if not results:
         return "No se encontraron resultados."
 
-    return json.dumps(results, ensure_ascii=False, indent=2)
+    return json.dumps(
+        [asdict(result) for result in results],
+        ensure_ascii=False,
+        indent=2,
+    )
 
 
 def _answer_with_web_context(question: str) -> str:
@@ -80,6 +86,9 @@ def _answer_with_web_context(question: str) -> str:
         raise ValueError("La pregunta no puede estar vacía.")
 
     results = search_web(question)
+    if not results:
+        return _format_insufficient_information(results)
+
     context = build_search_context(results)
     prompt = _build_grounded_prompt(question, context)
     answer = ask_model(prompt)
@@ -88,9 +97,12 @@ def _answer_with_web_context(question: str) -> str:
 
 def _build_grounded_prompt(question: str, context: str) -> str:
     return (
-        "Responde la pregunta usando exclusivamente el contexto web provisto.\n"
-        "Si el contexto no alcanza, dilo explícitamente.\n"
-        "Incluye una respuesta breve y factual.\n\n"
+        "You are a local AI assistant.\n"
+        "Answer the user question using only the provided context.\n"
+        "If the context does not contain enough information, say that you do "
+        "not have enough information.\n"
+        "Do not invent facts.\n"
+        "Keep the answer brief and factual.\n\n"
         f"Pregunta: {question}\n\n"
         "Contexto web:\n"
         f"{context}\n\n"
@@ -99,16 +111,31 @@ def _build_grounded_prompt(question: str, context: str) -> str:
 
 
 def _format_grounded_answer(
-    answer: str, results: list[dict[str, str]]
+    answer: str, results: list[SearchResult]
 ) -> str:
     if not results:
-        return answer
+        return _format_insufficient_information(results)
 
     sources = [
-        f"- {result.get('title', 'Sin título')}: {result.get('url', 'Sin URL')}"
+        f"- {result.title or 'Sin título'}: {result.url or 'Sin URL'}"
         for result in results[:3]
     ]
     return f"{answer}\n\nFuentes:\n" + "\n".join(sources)
+
+
+def _format_insufficient_information(results: list[SearchResult]) -> str:
+    message = (
+        "No tengo suficiente información en el contexto recuperado para "
+        "responder con certeza."
+    )
+    if not results:
+        return f"{message}\n\nFuentes:\n- No se encontraron URLs relevantes."
+
+    sources = [
+        f"- {result.title or 'Sin título'}: {result.url or 'Sin URL'}"
+        for result in results[:3]
+    ]
+    return f"{message}\n\nFuentes:\n" + "\n".join(sources)
 
 
 if __name__ == "__main__":
