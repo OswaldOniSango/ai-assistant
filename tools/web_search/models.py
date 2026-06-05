@@ -10,3 +10,10 @@ class SearchResult:
     title: str
     url: str
     snippet: str
+
+
+@dataclass(frozen=True)
+class RetrievedDocument:
+    title: str
+    url: str
+    content: str

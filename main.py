@@ -6,8 +6,8 @@ import json
 import sys
 from dataclasses import asdict
 
-from llm.context_builder import build_search_context
 from llm.qwen_runner import QwenRunner, ask_model
+from llm.web_rag import WebRagPipeline
 from tools.web_search import SearchResult, WebSearchTool, search_web
 
 
@@ -85,55 +85,40 @@ def _answer_with_web_context(question: str) -> str:
     if not question.strip():
         raise ValueError("La pregunta no puede estar vacía.")
 
-    results = search_web(question)
-    if not results:
-        return _format_insufficient_information(results)
+    pipeline = WebRagPipeline()
+    answer, search_results, documents = pipeline.answer_question(question)
 
-    context = build_search_context(results)
-    prompt = _build_grounded_prompt(question, context)
-    answer = ask_model(prompt)
-    return _format_grounded_answer(answer, results)
+    if not documents:
+        fallback_sources = search_results[:3]
+        return _format_insufficient_information(fallback_sources)
 
-
-def _build_grounded_prompt(question: str, context: str) -> str:
-    return (
-        "You are a local AI assistant.\n"
-        "Answer the user question using only the provided context.\n"
-        "If the context does not contain enough information, say that you do "
-        "not have enough information.\n"
-        "Do not invent facts.\n"
-        "Keep the answer brief and factual.\n\n"
-        f"Pregunta: {question}\n\n"
-        "Contexto web:\n"
-        f"{context}\n\n"
-        "Respuesta:"
-    )
+    return _format_grounded_answer(answer, search_results[:3])
 
 
 def _format_grounded_answer(
-    answer: str, results: list[SearchResult]
+    answer: str, sources: list[SearchResult]
 ) -> str:
-    if not results:
-        return _format_insufficient_information(results)
+    if not sources:
+        return _format_insufficient_information(sources)
 
     sources = [
         f"- {result.title or 'Sin título'}: {result.url or 'Sin URL'}"
-        for result in results[:3]
+        for result in sources[:3]
     ]
     return f"{answer}\n\nFuentes:\n" + "\n".join(sources)
 
 
-def _format_insufficient_information(results: list[SearchResult]) -> str:
+def _format_insufficient_information(sources: list[SearchResult]) -> str:
     message = (
         "No tengo suficiente información en el contexto recuperado para "
         "responder con certeza."
     )
-    if not results:
+    if not sources:
         return f"{message}\n\nFuentes:\n- No se encontraron URLs relevantes."
 
     sources = [
         f"- {result.title or 'Sin título'}: {result.url or 'Sin URL'}"
-        for result in results[:3]
+        for result in sources[:3]
     ]
     return f"{message}\n\nFuentes:\n" + "\n".join(sources)
 
