@@ -1,0 +1,75 @@
+"""Retrieval-augmented answering with web search."""
+
+from __future__ import annotations
+
+from llm.context_builder import build_search_context
+from llm.qwen_runner import ask_model
+from llm.query_planner import generate_search_queries
+from tools.web_search import RetrievedDocument, SearchResult, WebSearchService
+from tools.web_search.content_extractor import WebContentExtractor
+
+
+class WebRagPipeline:
+    """Plan queries, retrieve pages, and answer using extracted context."""
+
+    def __init__(
+        self,
+        search_service: WebSearchService | None = None,
+        content_extractor: WebContentExtractor | None = None,
+    ) -> None:
+        self.search_service = search_service or WebSearchService()
+        self.content_extractor = content_extractor or WebContentExtractor()
+
+    def answer_question(
+        self,
+        question: str,
+        query_limit: int = 4,
+        results_per_query: int = 3,
+        document_limit: int = 2,
+    ) -> tuple[str, list[SearchResult], list[RetrievedDocument]]:
+        planned_queries = generate_search_queries(question, limit=query_limit)
+        search_results = self._collect_results(planned_queries, results_per_query)
+        documents = self.content_extractor.extract_documents(
+            search_results,
+            limit=document_limit,
+        )
+
+        if not documents:
+            return "", search_results, documents
+
+        context = build_search_context(documents)
+        prompt = self._build_answer_prompt(question, context)
+        answer = ask_model(prompt)
+        return answer, search_results, documents
+
+    def _collect_results(
+        self,
+        queries: list[str],
+        results_per_query: int,
+    ) -> list[SearchResult]:
+        collected_results: list[SearchResult] = []
+        seen_urls: set[str] = set()
+
+        for query in queries:
+            results = self.search_service.search(query, limit=results_per_query)
+            for result in results:
+                if result.url in seen_urls:
+                    continue
+                seen_urls.add(result.url)
+                collected_results.append(result)
+
+        return collected_results
+
+    def _build_answer_prompt(self, question: str, context: str) -> str:
+        return (
+            "You are a local AI assistant.\n"
+            "Answer the user question using only the provided context.\n"
+            "If the context does not contain enough information, say that you do "
+            "not have enough information.\n"
+            "Do not invent facts.\n"
+            "Keep the answer brief and factual.\n\n"
+            f"Pregunta: {question}\n\n"
+            "Contexto web:\n"
+            f"{context}\n\n"
+            "Respuesta:"
+        )

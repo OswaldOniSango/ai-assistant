@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import re
+
 from .models import SearchResult
-from .query_builder import extract_entity_terms, extract_intent_terms, extract_query_terms
 
 
 def filter_relevant_results(
@@ -13,19 +14,11 @@ def filter_relevant_results(
 
 
 def is_relevant_result(query: str, result: SearchResult) -> bool:
-    query_terms = extract_query_terms(query)
+    query_terms = _extract_query_terms(query)
     if not query_terms:
         return False
 
-    entity_terms = extract_entity_terms(query)
-    intent_terms = extract_intent_terms(query)
     haystack = f"{result.title} {result.url} {result.snippet}".lower()
-
-    if entity_terms and not all(term in haystack for term in entity_terms):
-        return False
-
-    if intent_terms and not any(term in haystack for term in intent_terms):
-        return False
 
     matches = sum(1 for term in query_terms if term in haystack)
     if len(query_terms) == 1:
@@ -33,3 +26,16 @@ def is_relevant_result(query: str, result: SearchResult) -> bool:
 
     min_matches = min(2, len(query_terms))
     return matches >= min_matches
+
+
+def _extract_query_terms(query: str) -> list[str]:
+    normalized_query = (
+        query.lower()
+        .replace("á", "a")
+        .replace("é", "e")
+        .replace("í", "i")
+        .replace("ó", "o")
+        .replace("ú", "u")
+    )
+    tokens = re.findall(r"[a-z0-9]+", normalized_query)
+    return [token for token in tokens if len(token) >= 3]

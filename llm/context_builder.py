@@ -2,23 +2,23 @@
 
 from __future__ import annotations
 
-from tools.web_search import SearchResult
+from tools.web_search import RetrievedDocument
 
 
-def build_search_context(results: list[SearchResult]) -> str:
-    if not results:
+def build_search_context(documents: list[RetrievedDocument]) -> str:
+    if not documents:
         return "No search results were found."
 
     context_blocks: list[str] = []
-    for index, result in enumerate(results, start=1):
-        title = result.title.strip() or "Untitled"
-        url = result.url.strip() or "No URL"
-        snippet = result.snippet.strip() or "No summary available."
+    for index, document in enumerate(documents, start=1):
+        title = document.title.strip() or "Untitled"
+        url = document.url.strip() or "No URL"
+        content = document.content.strip() or "No content available."
         context_blocks.append(
             f"[Source {index}]\n"
             f"Title: {title}\n"
             f"URL: {url}\n"
-            f"Snippet: {snippet}"
+            f"Content: {content}"
         )
 
     return "\n\n".join(context_blocks)
