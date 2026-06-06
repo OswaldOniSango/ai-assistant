@@ -89,8 +89,14 @@ def _answer_with_web_context(question: str) -> str:
     answer, search_results, documents = pipeline.answer_question(question)
 
     if not documents:
-        fallback_sources = search_results[:3]
-        return _format_insufficient_information(fallback_sources)
+        if not search_results:
+            return _format_insufficient_information(search_results)
+        fallback_answer = ask_model(question)
+        return _format_model_fallback_answer(fallback_answer, search_results[:3])
+
+    if _looks_like_insufficient_information(answer):
+        fallback_answer = ask_model(question)
+        return _format_model_fallback_answer(fallback_answer, search_results[:3])
 
     return _format_grounded_answer(answer, search_results[:3])
 
@@ -121,6 +127,35 @@ def _format_insufficient_information(sources: list[SearchResult]) -> str:
         for result in sources[:3]
     ]
     return f"{message}\n\nFuentes:\n" + "\n".join(sources)
+
+
+def _format_model_fallback_answer(
+    answer: str, sources: list[SearchResult]
+) -> str:
+    prefix = (
+        "No pude recuperar suficiente contexto web confiable. "
+        "Comparto una respuesta general del modelo local:\n\n"
+    )
+    if not sources:
+        return f"{prefix}{answer}"
+
+    formatted_sources = [
+        f"- {result.title or 'Sin título'}: {result.url or 'Sin URL'}"
+        for result in sources[:3]
+    ]
+    return f"{prefix}{answer}\n\nFuentes recuperadas:\n" + "\n".join(formatted_sources)
+
+
+def _looks_like_insufficient_information(answer: str) -> bool:
+    normalized_answer = answer.strip().lower()
+    markers = (
+        "do not have enough information",
+        "don't have enough information",
+        "insufficient information",
+        "no tengo suficiente informacion",
+        "no tengo suficiente información",
+    )
+    return any(marker in normalized_answer for marker in markers)
 
 
 if __name__ == "__main__":
