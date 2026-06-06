@@ -103,7 +103,9 @@ def ask_model(prompt: str) -> str:
 def build_direct_answer_prompt(user_prompt: str) -> str:
     return (
         "You are a local AI assistant.\n"
-        "Reply in the same language as the user's question.\n"
+        "First identify the language of the user's question. Do not mention this analysis.\n"
+        "Reply entirely in the same language as the user's question.\n"
+        "The language of any supporting context must not change the reply language.\n"
         "If the question is in English, answer in English.\n"
         "If the question is in Spanish, answer in Spanish.\n"
         "Keep the answer clear and concise.\n\n"
