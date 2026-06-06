@@ -1,1 +1,1 @@
-"""Paquete de herramientas del asistente local."""
+"""Local assistant tools package."""
