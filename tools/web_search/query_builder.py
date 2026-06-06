@@ -10,7 +10,7 @@ def finalize_queries(
     fallback_query: str,
     limit: int = 5,
 ) -> list[str]:
-    candidates = [fallback_query, *raw_queries]
+    candidates = [*raw_queries, fallback_query]
     deduped_queries: list[str] = []
     seen: set[str] = set()
 

@@ -18,18 +18,13 @@ class WebSearchService:
         if not query.strip():
             raise ValueError("Search query cannot be empty.")
 
-        fallback_results: list[SearchResult] = []
-
         for provider in self.providers:
             results = provider.search(query, limit=limit)
-            if results and not fallback_results:
-                fallback_results = results[:limit]
-
             relevant_results = filter_relevant_results(query, results)
             if relevant_results:
                 return relevant_results[:limit]
 
-        return fallback_results
+        return []
 
 
 def search_web(query: str, limit: int = 5) -> list[SearchResult]:
