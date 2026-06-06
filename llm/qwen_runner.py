@@ -1,4 +1,4 @@
-"""Runner para un modelo local Qwen en formato GGUF."""
+"""Runner for a local Qwen GGUF model."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 
 try:
     from llama_cpp import Llama
-except ImportError as exc:  # pragma: no cover - depende del entorno
+except ImportError as exc:  # pragma: no cover - depends on the local environment
     Llama = None
     IMPORT_ERROR = exc
 else:
@@ -27,7 +27,7 @@ def _resolve_model_path() -> Path:
         if model_path.exists():
             return model_path
         raise FileNotFoundError(
-            f"QWEN_MODEL_PATH apunta a un archivo inexistente: {model_path}"
+            f"QWEN_MODEL_PATH points to a missing file: {model_path}"
         )
 
     search_roots = (MODELS_DIR, HOME_MODELS_DIR)
@@ -44,9 +44,8 @@ def _resolve_model_path() -> Path:
             return nested_candidates[0]
 
     raise FileNotFoundError(
-        "No se encontró un modelo GGUF. Define QWEN_MODEL_PATH, agrega un "
-        "archivo .gguf dentro de local-ai-assistant/models/ o colócalo en "
-        "~/local-ai-workspace/models/."
+        "No GGUF model was found. Set QWEN_MODEL_PATH, add a .gguf file under "
+        "local-ai-assistant/models/, or place it under ~/local-ai-workspace/models/."
     )
 
 
@@ -54,8 +53,8 @@ def _resolve_model_path() -> Path:
 def _load_model() -> "Llama":
     if Llama is None:
         raise RuntimeError(
-            "Falta instalar llama-cpp-python. "
-            "Instálalo con: pip install llama-cpp-python"
+            "llama-cpp-python is not installed. "
+            "Install it with: pip install llama-cpp-python"
         ) from IMPORT_ERROR
 
     model_path = _resolve_model_path()
@@ -72,7 +71,7 @@ def _load_model() -> "Llama":
 
 def ask_model(prompt: str) -> str:
     if not prompt.strip():
-        raise ValueError("El prompt no puede estar vacío.")
+        raise ValueError("Prompt cannot be empty.")
 
     model = _load_model()
 
@@ -101,8 +100,20 @@ def ask_model(prompt: str) -> str:
         return text.strip()
 
 
+def build_direct_answer_prompt(user_prompt: str) -> str:
+    return (
+        "You are a local AI assistant.\n"
+        "Reply in the same language as the user's question.\n"
+        "If the question is in English, answer in English.\n"
+        "If the question is in Spanish, answer in Spanish.\n"
+        "Keep the answer clear and concise.\n\n"
+        f"User question: {user_prompt}\n\n"
+        "Answer:"
+    )
+
+
 class QwenRunner:
-    """Adaptador simple para desacoplar el chat del backend local."""
+    """Small adapter that keeps chat code decoupled from the local backend."""
 
     def generate(self, prompt: str) -> str:
-        return ask_model(prompt)
+        return ask_model(build_direct_answer_prompt(prompt))

@@ -8,7 +8,7 @@ from tools.web_search.query_builder import finalize_queries, parse_query_lines
 
 def generate_search_queries(question: str, limit: int = 5) -> list[str]:
     if not question.strip():
-        raise ValueError("La pregunta no puede estar vacía.")
+        raise ValueError("Question cannot be empty.")
 
     planner_prompt = (
         "You are helping a local AI assistant search the web.\n"
@@ -19,12 +19,12 @@ def generate_search_queries(question: str, limit: int = 5) -> list[str]:
         "If the user's question is in Spanish, you may output queries in English when that improves web search quality.\n"
         "Return only the queries, one per line, with no numbering, no bullets, and no explanation.\n\n"
         "Examples:\n"
-        "User question: como puedo optimizar una query sql\n"
+        "User question: how can I optimize a SQL query\n"
         "sql query optimization best practices\n"
         "how to optimize sql queries performance\n"
         "sql query tuning indexing explain analyze\n"
         "postgres query optimization guide\n\n"
-        "User question: snowflake esta perdiendo clientes?\n"
+        "User question: is Snowflake losing customers?\n"
         "Snowflake customer churn 2026\n"
         "Snowflake customer count quarterly results 2026\n"
         "Snowflake revenue growth customers 2026\n"

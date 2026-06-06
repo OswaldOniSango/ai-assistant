@@ -1,1 +1,1 @@
-"""Paquete de integración con modelos locales."""
+"""Local model integration package."""
