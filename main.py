@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 import sys
 from dataclasses import asdict
 
@@ -93,10 +92,9 @@ def _answer_with_web_context(question: str) -> str:
 
     if not documents:
         if not search_results:
-            return _format_insufficient_information(question, search_results)
+            return _format_insufficient_information(search_results)
         fallback_answer = ask_model(build_direct_answer_prompt(question))
         return _format_model_fallback_answer(
-            question,
             fallback_answer,
             search_results[:3],
         )
@@ -104,77 +102,57 @@ def _answer_with_web_context(question: str) -> str:
     if _looks_like_insufficient_information(answer):
         fallback_answer = ask_model(build_direct_answer_prompt(question))
         return _format_model_fallback_answer(
-            question,
             fallback_answer,
             search_results[:3],
         )
 
-    return _format_grounded_answer(question, answer, search_results[:3])
+    return _format_grounded_answer(answer, search_results[:3])
 
 
-def _format_grounded_answer(
-    question: str, answer: str, sources: list[SearchResult]
-) -> str:
+def _format_grounded_answer(answer: str, sources: list[SearchResult]) -> str:
     if not sources:
-        return _format_insufficient_information(question, sources)
+        return _format_insufficient_information(sources)
 
     sources = [
-        f"- {result.title or _text(question, 'Untitled', 'Sin título')}: "
-        f"{result.url or _text(question, 'No URL', 'Sin URL')}"
+        f"- {result.title or 'Untitled'}: {result.url or 'No URL'}"
         for result in sources[:3]
     ]
-    return f"{answer}\n\n{_text(question, 'Sources', 'Fuentes')}:\n" + "\n".join(
-        sources
-    )
+    return f"{answer}\n\nSources:\n" + "\n".join(sources)
 
 
-def _format_insufficient_information(
-    question: str,
-    sources: list[SearchResult],
-) -> str:
-    message = _text(
-        question,
-        "I do not have enough information in the retrieved context to answer with certainty.",
-        "No tengo suficiente información en el contexto recuperado para responder con certeza.",
+def _format_insufficient_information(sources: list[SearchResult]) -> str:
+    message = (
+        "I do not have enough information in the retrieved context to answer "
+        "with certainty."
     )
     if not sources:
-        no_sources = _text(
-            question,
-            "No relevant URLs were found.",
-            "No se encontraron URLs relevantes.",
-        )
-        return f"{message}\n\n{_text(question, 'Sources', 'Fuentes')}:\n- {no_sources}"
+        return f"{message}\n\nSources:\n- No relevant URLs were found."
 
     sources = [
-        f"- {result.title or _text(question, 'Untitled', 'Sin título')}: "
-        f"{result.url or _text(question, 'No URL', 'Sin URL')}"
+        f"- {result.title or 'Untitled'}: {result.url or 'No URL'}"
         for result in sources[:3]
     ]
-    return f"{message}\n\n{_text(question, 'Sources', 'Fuentes')}:\n" + "\n".join(
-        sources
-    )
+    return f"{message}\n\nSources:\n" + "\n".join(sources)
 
 
 def _format_model_fallback_answer(
-    question: str,
     answer: str,
     sources: list[SearchResult],
 ) -> str:
-    prefix = _text(
-        question,
-        "I could not retrieve enough reliable web context. Here is a general answer from the local model:\n\n",
-        "No pude recuperar suficiente contexto web confiable. Comparto una respuesta general del modelo local:\n\n",
+    prefix = (
+        "I could not retrieve enough reliable web context. "
+        "Here is a general answer from the local model:\n\n"
     )
     if not sources:
         return f"{prefix}{answer}"
 
     formatted_sources = [
-        f"- {result.title or _text(question, 'Untitled', 'Sin título')}: "
-        f"{result.url or _text(question, 'No URL', 'Sin URL')}"
+        f"- {result.title or 'Untitled'}: {result.url or 'No URL'}"
         for result in sources[:3]
     ]
-    sources_label = _text(question, "Retrieved sources", "Fuentes recuperadas")
-    return f"{prefix}{answer}\n\n{sources_label}:\n" + "\n".join(formatted_sources)
+    return f"{prefix}{answer}\n\nRetrieved sources:\n" + "\n".join(
+        formatted_sources
+    )
 
 
 def _looks_like_insufficient_information(answer: str) -> bool:
@@ -187,34 +165,6 @@ def _looks_like_insufficient_information(answer: str) -> bool:
         "no tengo suficiente información",
     )
     return any(marker in normalized_answer for marker in markers)
-
-
-def _text(question: str, english: str, spanish: str) -> str:
-    return spanish if _is_probably_spanish(question) else english
-
-
-def _is_probably_spanish(text: str) -> bool:
-    normalized_text = text.lower()
-    if re.search(r"[áéíóúñ¿¡]", normalized_text):
-        return True
-
-    spanish_markers = {
-        "como",
-        "cuál",
-        "cual",
-        "cuando",
-        "donde",
-        "esta",
-        "está",
-        "para",
-        "puedo",
-        "que",
-        "quien",
-        "quién",
-        "sobre",
-    }
-    tokens = set(re.findall(r"[a-záéíóúñ]+", normalized_text))
-    return bool(tokens & spanish_markers)
 
 
 if __name__ == "__main__":
