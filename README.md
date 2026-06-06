@@ -1,47 +1,47 @@
 # local-ai-assistant
 
-Asistente local en Python con separación básica entre:
+A local Python assistant with basic separation between:
 
 - chat (`main.py`)
-- modelo local (`llm/`)
-- herramientas (`tools/`)
+- local model (`llm/`)
+- tools (`tools/`)
 
-## Instalar dependencias
+## Install dependencies
 
 ```bash
 cd local-ai-assistant
 pip install -r requirements.txt
 ```
 
-## Configurar el modelo GGUF
+## Configure the GGUF model
 
-Puedes usar cualquiera de estas opciones:
+You can use any of these options:
 
-1. Definir `QWEN_MODEL_PATH` con la ruta absoluta al archivo `.gguf`
-2. Guardar el modelo dentro de `local-ai-assistant/models/`
-3. Guardar el modelo dentro de `~/local-ai-workspace/models/`
+1. Set `QWEN_MODEL_PATH` to the absolute path of the `.gguf` file
+2. Store the model under `local-ai-assistant/models/`
+3. Store the model under `~/local-ai-workspace/models/`
 
-Ejemplo:
+Example:
 
 ```bash
-export QWEN_MODEL_PATH="/ruta/al/modelo/qwen.gguf"
+export QWEN_MODEL_PATH="/path/to/qwen.gguf"
 ```
 
-Ruta detectada automáticamente en este entorno:
+Automatically detected path in this environment:
 
 ```bash
 /Users/oswaldohernandez/local-ai-workspace/models/qwen2.5-3b/qwen2.5-3b-instruct-q5_k_m.gguf
 ```
 
-## Ejecutar
+## Run
 
-Modo CLI:
+CLI mode:
 
 ```bash
 python3 main.py chat "Explain what Snowflake is"
 ```
 
-Modo interactivo:
+Interactive mode:
 
 ```bash
 python3 main.py

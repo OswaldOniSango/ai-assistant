@@ -1,4 +1,4 @@
-"""Runner para un modelo local Qwen en formato GGUF."""
+"""Runner for a local Qwen GGUF model."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def _resolve_model_path() -> Path:
         if model_path.exists():
             return model_path
         raise FileNotFoundError(
-            f"QWEN_MODEL_PATH apunta a un archivo inexistente: {model_path}"
+            f"QWEN_MODEL_PATH points to a missing file: {model_path}"
         )
 
     search_roots = (MODELS_DIR, HOME_MODELS_DIR)
@@ -44,8 +44,8 @@ def _resolve_model_path() -> Path:
             return nested_candidates[0]
 
     raise FileNotFoundError(
-        "No se encontró un modelo GGUF. Define QWEN_MODEL_PATH, agrega un "
-        "archivo .gguf dentro de local-ai-assistant/models/ o colócalo en "
+        "No GGUF model was found. Set QWEN_MODEL_PATH, add a .gguf file "
+        "under local-ai-assistant/models/, or place it in "
         "~/local-ai-workspace/models/."
     )
 
@@ -54,8 +54,8 @@ def _resolve_model_path() -> Path:
 def _load_model() -> "Llama":
     if Llama is None:
         raise RuntimeError(
-            "Falta instalar llama-cpp-python. "
-            "Instálalo con: pip install llama-cpp-python"
+            "llama-cpp-python is not installed. "
+            "Install it with: pip install llama-cpp-python"
         ) from IMPORT_ERROR
 
     model_path = _resolve_model_path()
@@ -70,9 +70,14 @@ def _load_model() -> "Llama":
     )
 
 
-def ask_model(prompt: str) -> str:
+def ask_model(
+    prompt: str,
+    *,
+    max_tokens: int = 256,
+    temperature: float = 0.2,
+) -> str:
     if not prompt.strip():
-        raise ValueError("El prompt no puede estar vacío.")
+        raise ValueError("The prompt cannot be empty.")
 
     model = _load_model()
 
@@ -84,8 +89,8 @@ def ask_model(prompt: str) -> str:
                     "content": prompt,
                 }
             ],
-            temperature=0.2,
-            max_tokens=256,
+            temperature=temperature,
+            max_tokens=max_tokens,
         )
         message = response["choices"][0]["message"]["content"]
         return message.strip()
@@ -93,8 +98,8 @@ def ask_model(prompt: str) -> str:
         fallback_prompt = f"User: {prompt}\nAssistant:"
         response = model.create_completion(
             prompt=fallback_prompt,
-            temperature=0.2,
-            max_tokens=256,
+            temperature=temperature,
+            max_tokens=max_tokens,
             stop=["User:", "\n\nUser:"],
         )
         text = response["choices"][0]["text"]
@@ -102,7 +107,19 @@ def ask_model(prompt: str) -> str:
 
 
 class QwenRunner:
-    """Adaptador simple para desacoplar el chat del backend local."""
+    """Small adapter that decouples chat from the local backend."""
 
     def generate(self, prompt: str) -> str:
-        return ask_model(prompt)
+        return ask_model(build_direct_answer_prompt(prompt), max_tokens=192)
+
+
+def build_direct_answer_prompt(user_prompt: str) -> str:
+    return (
+        "You are a local AI assistant.\n"
+        "Reply in the same language as the user's question.\n"
+        "If the question is in English, answer in English.\n"
+        "If the question is in Spanish, answer in Spanish.\n"
+        "Keep the answer clear and concise.\n\n"
+        f"User question: {user_prompt}\n\n"
+        "Answer:"
+    )

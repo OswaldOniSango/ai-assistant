@@ -8,7 +8,7 @@ from tools.web_search.query_builder import finalize_queries, parse_query_lines
 
 def generate_search_queries(question: str, limit: int = 5) -> list[str]:
     if not question.strip():
-        raise ValueError("La pregunta no puede estar vacía.")
+        raise ValueError("The question cannot be empty.")
 
     planner_prompt = (
         "You are helping a local AI assistant search the web.\n"
@@ -31,6 +31,10 @@ def generate_search_queries(question: str, limit: int = 5) -> list[str]:
         "analyst report Snowflake demand trends 2026\n\n"
         f"User question: {question}\n"
     )
-    raw_output = ask_model(planner_prompt)
+    raw_output = ask_model(
+        planner_prompt,
+        max_tokens=80,
+        temperature=0.1,
+    )
     parsed_queries = parse_query_lines(raw_output)
     return finalize_queries(parsed_queries, fallback_query=question, limit=limit)

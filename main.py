@@ -1,18 +1,19 @@
-"""Punto de entrada del asistente local."""
+"""Entry point for the local assistant."""
 
 from __future__ import annotations
 
 import json
+import re
 import sys
 from dataclasses import asdict
 
-from llm.qwen_runner import QwenRunner, ask_model
+from llm.qwen_runner import QwenRunner, ask_model, build_direct_answer_prompt
 from llm.web_rag import WebRagPipeline
 from tools.web_search import SearchResult, WebSearchTool, search_web
 
 
 class LocalAIAssistant:
-    """Coordina el chat, el modelo local y las herramientas."""
+    """Coordinates chat, the local model, and tools."""
 
     def __init__(self) -> None:
         self.model = QwenRunner()
@@ -20,16 +21,27 @@ class LocalAIAssistant:
 
     def run_interactive(self) -> None:
         print("Local AI Assistant")
-        print("Escribe 'salir' para terminar.\n")
+        print("Type 'exit' to quit.\n")
 
         while True:
-            user_message = input("Tú: ").strip()
+            user_message = input("You: ").strip()
             if user_message.lower() in {"salir", "exit", "quit"}:
-                print("Asistente: Hasta luego.")
+                print("Assistant: Goodbye.")
                 break
 
             if not user_message:
-                print("Asistente: Escribe un mensaje para continuar.")
+                print("Assistant: Enter a message to continue.")
+                continue
+
+            if user_message.lower().startswith("search "):
+                query = user_message[7:].strip()
+                tool_result = self.web_search.search(query)
+                print(_format_search_results(tool_result))
+                continue
+
+            if user_message.lower().startswith("search-answer "):
+                query = user_message[14:].strip()
+                print(_answer_with_web_context(query))
                 continue
 
             if user_message.lower().startswith("buscar "):
@@ -44,7 +56,7 @@ class LocalAIAssistant:
                 continue
 
             response = self.model.generate(user_message)
-            print(f"Asistente: {response}")
+            print(f"Assistant: {response}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -52,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if len(args) >= 3 and args[1] == "chat":
         prompt = " ".join(args[2:]).strip()
-        print(ask_model(prompt))
+        print(ask_model(build_direct_answer_prompt(prompt)))
         return 0
 
     if len(args) >= 3 and args[1] == "search":
@@ -72,7 +84,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def _format_search_results(results: list[SearchResult]) -> str:
     if not results:
-        return "No se encontraron resultados."
+        return "No results found."
 
     return json.dumps(
         [asdict(result) for result in results],
@@ -83,67 +95,65 @@ def _format_search_results(results: list[SearchResult]) -> str:
 
 def _answer_with_web_context(question: str) -> str:
     if not question.strip():
-        raise ValueError("La pregunta no puede estar vacía.")
+        raise ValueError("The question cannot be empty.")
 
     pipeline = WebRagPipeline()
     answer, search_results, documents = pipeline.answer_question(question)
 
     if not documents:
         if not search_results:
-            return _format_insufficient_information(search_results)
-        fallback_answer = ask_model(question)
-        return _format_model_fallback_answer(fallback_answer, search_results[:3])
+            fallback_answer = ask_model(
+                build_direct_answer_prompt(question),
+                max_tokens=192,
+            )
+            return fallback_answer
+        fallback_answer = ask_model(
+            build_direct_answer_prompt(question),
+            max_tokens=192,
+        )
+        return _format_grounded_answer(question, fallback_answer, search_results[:3])
 
     if _looks_like_insufficient_information(answer):
-        fallback_answer = ask_model(question)
-        return _format_model_fallback_answer(fallback_answer, search_results[:3])
+        return _format_insufficient_information(question, search_results[:3])
 
-    return _format_grounded_answer(answer, search_results[:3])
+    return _format_grounded_answer(question, answer, search_results[:3])
 
 
 def _format_grounded_answer(
-    answer: str, sources: list[SearchResult]
+    question: str, answer: str, sources: list[SearchResult]
 ) -> str:
     if not sources:
-        return _format_insufficient_information(sources)
+        return _format_insufficient_information(question, sources)
 
     sources = [
-        f"- {result.title or 'Sin título'}: {result.url or 'Sin URL'}"
+        f"- {result.title or 'Untitled'}: {result.url or 'No URL'}"
         for result in sources[:3]
     ]
-    return f"{answer}\n\nFuentes:\n" + "\n".join(sources)
+    return f"{answer}\n\n{_sources_label(question)}:\n" + "\n".join(sources)
 
 
-def _format_insufficient_information(sources: list[SearchResult]) -> str:
-    message = (
-        "No tengo suficiente información en el contexto recuperado para "
-        "responder con certeza."
-    )
-    if not sources:
-        return f"{message}\n\nFuentes:\n- No se encontraron URLs relevantes."
-
-    sources = [
-        f"- {result.title or 'Sin título'}: {result.url or 'Sin URL'}"
-        for result in sources[:3]
-    ]
-    return f"{message}\n\nFuentes:\n" + "\n".join(sources)
-
-
-def _format_model_fallback_answer(
-    answer: str, sources: list[SearchResult]
+def _format_insufficient_information(
+    question: str,
+    sources: list[SearchResult],
 ) -> str:
-    prefix = (
-        "No pude recuperar suficiente contexto web confiable. "
-        "Comparto una respuesta general del modelo local:\n\n"
+    message = _localized_message(
+        question,
+        english="I do not have enough information in the retrieved context to answer confidently.",
+        spanish="No tengo suficiente información en el contexto recuperado para responder con certeza.",
     )
     if not sources:
-        return f"{prefix}{answer}"
+        missing_sources = _localized_message(
+            question,
+            english="No relevant URLs were found.",
+            spanish="No se encontraron URLs relevantes.",
+        )
+        return f"{message}\n\n{_sources_label(question)}:\n- {missing_sources}"
 
-    formatted_sources = [
-        f"- {result.title or 'Sin título'}: {result.url or 'Sin URL'}"
+    sources = [
+        f"- {result.title or 'Untitled'}: {result.url or 'No URL'}"
         for result in sources[:3]
     ]
-    return f"{prefix}{answer}\n\nFuentes recuperadas:\n" + "\n".join(formatted_sources)
+    return f"{message}\n\n{_sources_label(question)}:\n" + "\n".join(sources)
 
 
 def _looks_like_insufficient_information(answer: str) -> bool:
@@ -156,6 +166,45 @@ def _looks_like_insufficient_information(answer: str) -> bool:
         "no tengo suficiente información",
     )
     return any(marker in normalized_answer for marker in markers)
+
+
+def _sources_label(question: str) -> str:
+    return _localized_message(
+        question,
+        english="Sources",
+        spanish="Fuentes",
+    )
+
+
+def _localized_message(question: str, english: str, spanish: str) -> str:
+    return spanish if _is_probably_spanish(question) else english
+
+
+def _is_probably_spanish(text: str) -> bool:
+    normalized_text = text.lower()
+    if re.search(r"[áéíóúñ¿¡]", normalized_text):
+        return True
+
+    spanish_markers = {
+        "como",
+        "consulta",
+        "cuál",
+        "cual",
+        "debo",
+        "donde",
+        "esta",
+        "está",
+        "mejor",
+        "para",
+        "por",
+        "puedo",
+        "que",
+        "qué",
+        "sql",
+        "una",
+    }
+    tokens = set(re.findall(r"[a-záéíóúñ]+", normalized_text))
+    return len(tokens & spanish_markers) >= 2
 
 
 if __name__ == "__main__":
