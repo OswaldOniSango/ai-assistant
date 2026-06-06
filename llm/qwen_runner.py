@@ -8,7 +8,7 @@ from pathlib import Path
 
 try:
     from llama_cpp import Llama
-except ImportError as exc:  # pragma: no cover - depende del entorno
+except ImportError as exc:  # pragma: no cover - depends on the environment
     Llama = None
     IMPORT_ERROR = exc
 else:
@@ -70,12 +70,7 @@ def _load_model() -> "Llama":
     )
 
 
-def ask_model(
-    prompt: str,
-    *,
-    max_tokens: int = 256,
-    temperature: float = 0.2,
-) -> str:
+def ask_model(prompt: str) -> str:
     if not prompt.strip():
         raise ValueError("The prompt cannot be empty.")
 
@@ -89,8 +84,8 @@ def ask_model(
                     "content": prompt,
                 }
             ],
-            temperature=temperature,
-            max_tokens=max_tokens,
+            temperature=0.2,
+            max_tokens=256,
         )
         message = response["choices"][0]["message"]["content"]
         return message.strip()
@@ -98,8 +93,8 @@ def ask_model(
         fallback_prompt = f"User: {prompt}\nAssistant:"
         response = model.create_completion(
             prompt=fallback_prompt,
-            temperature=temperature,
-            max_tokens=max_tokens,
+            temperature=0.2,
+            max_tokens=256,
             stop=["User:", "\n\nUser:"],
         )
         text = response["choices"][0]["text"]
@@ -110,7 +105,7 @@ class QwenRunner:
     """Small adapter that decouples chat from the local backend."""
 
     def generate(self, prompt: str) -> str:
-        return ask_model(build_direct_answer_prompt(prompt), max_tokens=192)
+        return ask_model(build_direct_answer_prompt(prompt))
 
 
 def build_direct_answer_prompt(user_prompt: str) -> str:

@@ -102,19 +102,21 @@ def _answer_with_web_context(question: str) -> str:
 
     if not documents:
         if not search_results:
-            fallback_answer = ask_model(
-                build_direct_answer_prompt(question),
-                max_tokens=192,
-            )
-            return fallback_answer
-        fallback_answer = ask_model(
-            build_direct_answer_prompt(question),
-            max_tokens=192,
+            return _format_insufficient_information(question, search_results)
+        fallback_answer = ask_model(build_direct_answer_prompt(question))
+        return _format_model_fallback_answer(
+            question,
+            fallback_answer,
+            search_results[:3],
         )
-        return _format_grounded_answer(question, fallback_answer, search_results[:3])
 
     if _looks_like_insufficient_information(answer):
-        return _format_insufficient_information(question, search_results[:3])
+        fallback_answer = ask_model(build_direct_answer_prompt(question))
+        return _format_model_fallback_answer(
+            question,
+            fallback_answer,
+            search_results[:3],
+        )
 
     return _format_grounded_answer(question, answer, search_results[:3])
 
@@ -154,6 +156,40 @@ def _format_insufficient_information(
         for result in sources[:3]
     ]
     return f"{message}\n\n{_sources_label(question)}:\n" + "\n".join(sources)
+
+
+def _format_model_fallback_answer(
+    question: str,
+    answer: str,
+    sources: list[SearchResult],
+) -> str:
+    prefix = _localized_message(
+        question,
+        english=(
+            "I could not retrieve enough reliable web context. "
+            "Here is a general answer from the local model:\n\n"
+        ),
+        spanish=(
+            "No pude recuperar suficiente contexto web confiable. "
+            "Comparto una respuesta general del modelo local:\n\n"
+        ),
+    )
+    if not sources:
+        return f"{prefix}{answer}"
+
+    formatted_sources = [
+        f"- {result.title or 'Untitled'}: {result.url or 'No URL'}"
+        for result in sources[:3]
+    ]
+    retrieved_sources_label = _localized_message(
+        question,
+        english="Retrieved sources",
+        spanish="Fuentes recuperadas",
+    )
+    return (
+        f"{prefix}{answer}\n\n{retrieved_sources_label}:\n"
+        + "\n".join(formatted_sources)
+    )
 
 
 def _looks_like_insufficient_information(answer: str) -> bool:

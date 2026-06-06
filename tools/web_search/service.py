@@ -14,13 +14,7 @@ class WebSearchService:
     def __init__(self, providers: list[object] | None = None) -> None:
         self.providers = providers or [DuckDuckGoProvider(), BingProvider()]
 
-    def search(
-        self,
-        query: str,
-        limit: int = 5,
-        *,
-        allow_fallback: bool = True,
-    ) -> list[SearchResult]:
+    def search(self, query: str, limit: int = 5) -> list[SearchResult]:
         if not query.strip():
             raise ValueError("Search query cannot be empty.")
 
@@ -35,7 +29,7 @@ class WebSearchService:
             if relevant_results:
                 return relevant_results[:limit]
 
-        return fallback_results if allow_fallback else []
+        return fallback_results
 
 
 def search_web(query: str, limit: int = 5) -> list[SearchResult]:

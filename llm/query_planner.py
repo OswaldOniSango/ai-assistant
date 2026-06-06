@@ -31,10 +31,6 @@ def generate_search_queries(question: str, limit: int = 5) -> list[str]:
         "analyst report Snowflake demand trends 2026\n\n"
         f"User question: {question}\n"
     )
-    raw_output = ask_model(
-        planner_prompt,
-        max_tokens=80,
-        temperature=0.1,
-    )
+    raw_output = ask_model(planner_prompt)
     parsed_queries = parse_query_lines(raw_output)
     return finalize_queries(parsed_queries, fallback_query=question, limit=limit)
