@@ -2,11 +2,24 @@
 
 from __future__ import annotations
 
+import logging
+
 from llm.context_builder import build_search_context
 from llm.qwen_runner import ask_model
 from llm.query_planner import generate_search_queries
 from tools.web_search import RetrievedDocument, SearchResult, WebSearchService
 from tools.web_search.content_extractor import WebContentExtractor
+
+# Internal control token. The RAG prompt asks the model to reply with this
+# exact token when the web context is not enough, so callers can fall back
+# without matching human phrases in multiple languages.
+INSUFFICIENT_CONTEXT = "INSUFFICIENT_CONTEXT"
+
+logger = logging.getLogger(__name__)
+
+
+def is_insufficient_context(answer: str) -> bool:
+    return INSUFFICIENT_CONTEXT in answer.strip().upper()
 
 
 class WebRagPipeline:
@@ -28,18 +41,28 @@ class WebRagPipeline:
         document_limit: int = 2,
     ) -> tuple[str, list[SearchResult], list[RetrievedDocument]]:
         planned_queries = generate_search_queries(question, limit=query_limit)
+        logger.info("Planned queries: %s", planned_queries)
+
         search_results = self._collect_results(planned_queries, results_per_query)
+        logger.info("Search results collected: %d", len(search_results))
+
         documents = self.content_extractor.extract_documents(
             search_results,
             limit=document_limit,
         )
+        logger.info("Documents extracted: %d", len(documents))
 
         if not documents:
+            logger.info("No documents extracted; web answer is empty.")
             return "", search_results, documents
 
         context = build_search_context(documents)
         prompt = self._build_answer_prompt(question, context)
         answer = ask_model(prompt)
+
+        if is_insufficient_context(answer):
+            logger.info("Model reported insufficient web context.")
+
         return answer, search_results, documents
 
     def _collect_results(
@@ -64,8 +87,8 @@ class WebRagPipeline:
         return (
             "You are a local AI assistant.\n"
             "Answer the user question using only the provided context.\n"
-            "If the context does not contain enough information, say that you do "
-            "not have enough information.\n"
+            "If the context does not contain enough information to answer, "
+            f"reply with exactly this single word and nothing else: {INSUFFICIENT_CONTEXT}\n"
             "Do not invent facts.\n"
             "First identify the language of the user's question. Do not mention this analysis.\n"
             "Reply entirely in the same language as the user's question.\n"
