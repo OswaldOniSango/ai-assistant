@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date
+from itertools import zip_longest
 from typing import Callable
 
 from llm.context_builder import build_search_context
@@ -24,6 +25,33 @@ def is_insufficient_context(answer: str) -> bool:
     return INSUFFICIENT_CONTEXT in answer.strip().upper()
 
 
+def _deduplicate_documents(
+    documents: list[RetrievedDocument],
+) -> list[RetrievedDocument]:
+    """Drop documents whose text is identical to one already kept."""
+    unique_documents: list[RetrievedDocument] = []
+    seen_contents: set[str] = set()
+
+    for document in documents:
+        content_key = " ".join(document.content.split()).lower()
+        if content_key in seen_contents:
+            continue
+        seen_contents.add(content_key)
+        unique_documents.append(document)
+
+    return unique_documents
+
+
+def _normalize_url(url: str) -> str:
+    """Treat http/https, with/without www, and trailing slashes as the same page."""
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url.strip().lower())
+    host = parsed.netloc.removeprefix("www.")
+    path = parsed.path.rstrip("/")
+    return f"{host}{path}"
+
+
 class WebRagPipeline:
     """Plan queries, retrieve pages, and answer using extracted context."""
 
@@ -42,7 +70,7 @@ class WebRagPipeline:
         question: str,
         query_limit: int = 4,
         results_per_query: int = 3,
-        document_limit: int = 2,
+        document_limit: int = 4,
     ) -> tuple[str, list[SearchResult], list[RetrievedDocument]]:
         planned_queries = generate_search_queries(
             question,
@@ -58,7 +86,15 @@ class WebRagPipeline:
             search_results,
             limit=document_limit,
         )
+        documents = _deduplicate_documents(documents)
         logger.info("Documents extracted: %d", len(documents))
+        for document in documents:
+            logger.info(
+                "Document: %s (%s) | content starts: %.150s",
+                document.title,
+                document.url,
+                document.content,
+            )
 
         if not documents:
             logger.info("No documents extracted; web answer is empty.")
@@ -78,15 +114,28 @@ class WebRagPipeline:
         queries: list[str],
         results_per_query: int,
     ) -> list[SearchResult]:
+        """Interleave results across queries so no single query dominates.
+
+        With 4 queries x 3 results, the old code put all of query 1 first,
+        so document extraction never reached the other queries' results.
+        Round-robin keeps the retrieved documents diverse.
+        """
+        per_query_results = [
+            self.search_service.search(query, limit=results_per_query)
+            for query in queries
+        ]
+
         collected_results: list[SearchResult] = []
         seen_urls: set[str] = set()
 
-        for query in queries:
-            results = self.search_service.search(query, limit=results_per_query)
-            for result in results:
-                if result.url in seen_urls:
+        for result_round in zip_longest(*per_query_results):
+            for result in result_round:
+                if result is None:
                     continue
-                seen_urls.add(result.url)
+                url_key = _normalize_url(result.url)
+                if url_key in seen_urls:
+                    continue
+                seen_urls.add(url_key)
                 collected_results.append(result)
 
         return collected_results

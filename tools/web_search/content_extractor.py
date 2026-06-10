@@ -26,9 +26,12 @@ class WebContentExtractor:
         results: list[SearchResult],
         limit: int = 3,
     ) -> list[RetrievedDocument]:
+        """Keep trying results until we have `limit` usable documents."""
         documents: list[RetrievedDocument] = []
 
-        for result in results[:limit]:
+        for result in results:
+            if len(documents) >= limit:
+                break
             document = self.extract_document(result)
             if document is not None:
                 documents.append(document)
