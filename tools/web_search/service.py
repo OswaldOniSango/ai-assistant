@@ -29,13 +29,3 @@ class WebSearchService:
 
 def search_web(query: str, limit: int = 5) -> list[SearchResult]:
     return WebSearchService().search(query, limit=limit)
-
-
-class WebSearchTool:
-    """Small adapter for the assistant tool layer."""
-
-    def __init__(self, service: WebSearchService | None = None) -> None:
-        self.service = service or WebSearchService()
-
-    def search(self, query: str, limit: int = 5) -> list[SearchResult]:
-        return self.service.search(query, limit=limit)

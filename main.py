@@ -8,51 +8,8 @@ import os
 import sys
 from dataclasses import asdict
 
-from llm.assistant_router import AssistantRouter
-from llm.qwen_runner import QwenRunner, ask_model, build_direct_answer_prompt
-from llm.web_rag import WebRagPipeline, is_insufficient_context
-from tools.web_search import SearchResult, WebSearchTool, search_web
-
-
-class LocalAIAssistant:
-    """Coordinate chat, the local model, and tools."""
-
-    def __init__(self) -> None:
-        self.model = QwenRunner()
-        self.web_search = WebSearchTool()
-
-    def run_interactive(self) -> None:
-        print("Local AI Assistant")
-        print("Type 'exit' to finish.\n")
-
-        while True:
-            user_message = input("You: ").strip()
-            if user_message.lower() in {"exit", "quit"}:
-                print("Assistant: Goodbye.")
-                break
-
-            if not user_message:
-                print("Assistant: Type a message to continue.")
-                continue
-
-            if user_message.lower().startswith("search "):
-                command_length = user_message.find(" ") + 1
-                query = user_message[command_length:].strip()
-                tool_result = self.web_search.search(query)
-                print(_format_search_results(tool_result))
-                continue
-
-            if user_message.lower().startswith("search-answer "):
-                command_length = user_message.find(" ") + 1
-                query = user_message[command_length:].strip()
-                print(_answer_with_web_context(query))
-                continue
-
-            response = self.model.generate(user_message)
-            print(f"Assistant: {response}")
-
-
-logger = logging.getLogger(__name__)
+from assistant import Assistant
+from tools.web_search import SearchResult, search_web
 
 
 def _configure_logging() -> None:
@@ -67,29 +24,54 @@ def main(argv: list[str] | None = None) -> int:
     _configure_logging()
     args = argv if argv is not None else sys.argv
 
-    if len(args) >= 3 and args[1] == "chat":
-        prompt = " ".join(args[2:]).strip()
-        print(ask_model(build_direct_answer_prompt(prompt)))
-        return 0
+    command = args[1] if len(args) >= 2 else ""
+    argument = " ".join(args[2:]).strip() if len(args) >= 3 else ""
 
-    if len(args) >= 3 and args[1] == "search":
-        query = " ".join(args[2:]).strip()
-        print(_format_search_results(search_web(query)))
-        return 0
+    if command and argument:
+        assistant = Assistant()
 
-    if len(args) >= 3 and args[1] == "search-answer":
-        query = " ".join(args[2:]).strip()
-        print(_answer_with_web_context(query))
-        return 0
+        if command == "chat":
+            print(assistant.answer_locally(argument))
+            return 0
 
-    if len(args) >= 3 and args[1] == "ask":
-        question = " ".join(args[2:]).strip()
-        print(_answer_with_routing(question))
-        return 0
+        if command == "search":
+            print(_format_search_results(search_web(argument)))
+            return 0
 
-    app = LocalAIAssistant()
-    app.run_interactive()
+        if command == "search-answer":
+            print(assistant.answer_with_web_context(argument))
+            return 0
+
+        if command == "ask":
+            print(assistant.answer(argument))
+            return 0
+
+    run_interactive()
     return 0
+
+
+def run_interactive() -> None:
+    assistant = Assistant()
+
+    print("Local AI Assistant")
+    print("Type 'exit' to finish.\n")
+
+    while True:
+        user_message = input("You: ").strip()
+        if user_message.lower() in {"exit", "quit"}:
+            print("Assistant: Goodbye.")
+            break
+
+        if not user_message:
+            print("Assistant: Type a message to continue.")
+            continue
+
+        if user_message.lower().startswith("search "):
+            query = user_message[len("search "):].strip()
+            print(_format_search_results(assistant.web_pipeline.search_service.search(query)))
+            continue
+
+        print(f"Assistant: {assistant.answer(user_message)}")
 
 
 def _format_search_results(results: list[SearchResult]) -> str:
@@ -101,48 +83,6 @@ def _format_search_results(results: list[SearchResult]) -> str:
         ensure_ascii=False,
         indent=2,
     )
-
-
-def _answer_with_routing(question: str) -> str:
-    if not question.strip():
-        raise ValueError("Question cannot be empty.")
-
-    router = AssistantRouter()
-    routing = router.decide(question)
-    print(f"Decision: {routing.decision}")
-    print(f"Reason: {routing.reason}")
-
-    if routing.decision == "WEB":
-        return _answer_with_web_context(question)
-
-    return ask_model(build_direct_answer_prompt(question))
-
-
-def _answer_with_web_context(question: str) -> str:
-    if not question.strip():
-        raise ValueError("Question cannot be empty.")
-
-    pipeline = WebRagPipeline()
-    answer, search_results, documents = pipeline.answer_question(question)
-
-    # If the web pipeline could not produce a grounded answer,
-    # quietly answer with the local model instead.
-    if not documents or is_insufficient_context(answer):
-        logger.info("Web context unavailable; falling back to the local model.")
-        return ask_model(build_direct_answer_prompt(question))
-
-    return _format_grounded_answer(answer, search_results[:3])
-
-
-def _format_grounded_answer(answer: str, sources: list[SearchResult]) -> str:
-    if not sources:
-        return answer
-
-    formatted_sources = [
-        f"- {result.title or 'Untitled'}: {result.url or 'No URL'}"
-        for result in sources[:3]
-    ]
-    return f"{answer}\n\nSources:\n" + "\n".join(formatted_sources)
 
 
 if __name__ == "__main__":

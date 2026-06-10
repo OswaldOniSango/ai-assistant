@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Callable
 
 from llm.context_builder import build_search_context
 from llm.qwen_runner import ask_model
@@ -29,9 +30,11 @@ class WebRagPipeline:
         self,
         search_service: WebSearchService | None = None,
         content_extractor: WebContentExtractor | None = None,
+        model: Callable[[str], str] = ask_model,
     ) -> None:
         self.search_service = search_service or WebSearchService()
         self.content_extractor = content_extractor or WebContentExtractor()
+        self.model = model
 
     def answer_question(
         self,
@@ -40,7 +43,11 @@ class WebRagPipeline:
         results_per_query: int = 3,
         document_limit: int = 2,
     ) -> tuple[str, list[SearchResult], list[RetrievedDocument]]:
-        planned_queries = generate_search_queries(question, limit=query_limit)
+        planned_queries = generate_search_queries(
+            question,
+            limit=query_limit,
+            model=self.model,
+        )
         logger.info("Planned queries: %s", planned_queries)
 
         search_results = self._collect_results(planned_queries, results_per_query)
@@ -58,7 +65,7 @@ class WebRagPipeline:
 
         context = build_search_context(documents)
         prompt = self._build_answer_prompt(question, context)
-        answer = ask_model(prompt)
+        answer = self.model(prompt)
 
         if is_insufficient_context(answer):
             logger.info("Model reported insufficient web context.")
