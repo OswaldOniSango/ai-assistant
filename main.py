@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
 import sys
 from dataclasses import asdict
 
 from llm.assistant_router import AssistantRouter
 from llm.qwen_runner import QwenRunner, ask_model, build_direct_answer_prompt
-from llm.web_rag import WebRagPipeline
+from llm.web_rag import WebRagPipeline, is_insufficient_context
 from tools.web_search import SearchResult, WebSearchTool, search_web
 
 
@@ -50,7 +52,19 @@ class LocalAIAssistant:
             print(f"Assistant: {response}")
 
 
+logger = logging.getLogger(__name__)
+
+
+def _configure_logging() -> None:
+    """Enable diagnostics with: ASSISTANT_LOG_LEVEL=INFO python3 main.py ..."""
+    logging.basicConfig(
+        level=os.getenv("ASSISTANT_LOG_LEVEL", "WARNING").upper(),
+        format="%(levelname)s %(name)s: %(message)s",
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
+    _configure_logging()
     args = argv if argv is not None else sys.argv
 
     if len(args) >= 3 and args[1] == "chat":
@@ -111,81 +125,24 @@ def _answer_with_web_context(question: str) -> str:
     pipeline = WebRagPipeline()
     answer, search_results, documents = pipeline.answer_question(question)
 
-    if not documents:
-        if not search_results:
-            return _format_insufficient_information(search_results)
-        fallback_answer = ask_model(build_direct_answer_prompt(question))
-        return _format_model_fallback_answer(
-            fallback_answer,
-            search_results[:3],
-        )
-
-    if _looks_like_insufficient_information(answer):
-        fallback_answer = ask_model(build_direct_answer_prompt(question))
-        return _format_model_fallback_answer(
-            fallback_answer,
-            search_results[:3],
-        )
+    # If the web pipeline could not produce a grounded answer,
+    # quietly answer with the local model instead.
+    if not documents or is_insufficient_context(answer):
+        logger.info("Web context unavailable; falling back to the local model.")
+        return ask_model(build_direct_answer_prompt(question))
 
     return _format_grounded_answer(answer, search_results[:3])
 
 
 def _format_grounded_answer(answer: str, sources: list[SearchResult]) -> str:
     if not sources:
-        return _format_insufficient_information(sources)
-
-    sources = [
-        f"- {result.title or 'Untitled'}: {result.url or 'No URL'}"
-        for result in sources[:3]
-    ]
-    return f"{answer}\n\nSources:\n" + "\n".join(sources)
-
-
-def _format_insufficient_information(sources: list[SearchResult]) -> str:
-    message = (
-        "I do not have enough information in the retrieved context to answer "
-        "with certainty."
-    )
-    if not sources:
-        return f"{message}\n\nSources:\n- No relevant URLs were found."
-
-    sources = [
-        f"- {result.title or 'Untitled'}: {result.url or 'No URL'}"
-        for result in sources[:3]
-    ]
-    return f"{message}\n\nSources:\n" + "\n".join(sources)
-
-
-def _format_model_fallback_answer(
-    answer: str,
-    sources: list[SearchResult],
-) -> str:
-    prefix = (
-        "I could not retrieve enough reliable web context. "
-        "Here is a general answer from the local model:\n\n"
-    )
-    if not sources:
-        return f"{prefix}{answer}"
+        return answer
 
     formatted_sources = [
         f"- {result.title or 'Untitled'}: {result.url or 'No URL'}"
         for result in sources[:3]
     ]
-    return f"{prefix}{answer}\n\nRetrieved sources:\n" + "\n".join(
-        formatted_sources
-    )
-
-
-def _looks_like_insufficient_information(answer: str) -> bool:
-    normalized_answer = answer.strip().lower()
-    markers = (
-        "do not have enough information",
-        "don't have enough information",
-        "insufficient information",
-        "no tengo suficiente informacion",
-        "no tengo suficiente información",
-    )
-    return any(marker in normalized_answer for marker in markers)
+    return f"{answer}\n\nSources:\n" + "\n".join(formatted_sources)
 
 
 if __name__ == "__main__":
