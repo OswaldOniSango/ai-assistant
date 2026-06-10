@@ -6,6 +6,7 @@ import json
 import sys
 from dataclasses import asdict
 
+from llm.assistant_router import AssistantRouter
 from llm.qwen_runner import QwenRunner, ask_model, build_direct_answer_prompt
 from llm.web_rag import WebRagPipeline
 from tools.web_search import SearchResult, WebSearchTool, search_web
@@ -67,6 +68,11 @@ def main(argv: list[str] | None = None) -> int:
         print(_answer_with_web_context(query))
         return 0
 
+    if len(args) >= 3 and args[1] == "ask":
+        question = " ".join(args[2:]).strip()
+        print(_answer_with_routing(question))
+        return 0
+
     app = LocalAIAssistant()
     app.run_interactive()
     return 0
@@ -81,6 +87,21 @@ def _format_search_results(results: list[SearchResult]) -> str:
         ensure_ascii=False,
         indent=2,
     )
+
+
+def _answer_with_routing(question: str) -> str:
+    if not question.strip():
+        raise ValueError("Question cannot be empty.")
+
+    router = AssistantRouter()
+    routing = router.decide(question)
+    print(f"Decision: {routing.decision}")
+    print(f"Reason: {routing.reason}")
+
+    if routing.decision == "WEB":
+        return _answer_with_web_context(question)
+
+    return ask_model(build_direct_answer_prompt(question))
 
 
 def _answer_with_web_context(question: str) -> str:
