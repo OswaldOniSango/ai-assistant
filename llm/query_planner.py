@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Callable
 
 from llm.qwen_runner import ask_model
@@ -16,8 +17,12 @@ def generate_search_queries(
     if not question.strip():
         raise ValueError("Question cannot be empty.")
 
+    today = date.today().isoformat()
     planner_prompt = (
         "You are helping a local AI assistant search the web.\n"
+        f"Today's date is {today}. Your training data is outdated, so always "
+        "use this date to pick the correct year in queries about current "
+        "events, seasons, prices, or versions. Never use a year from memory.\n"
         "Generate 3 to 5 concise search engine queries that maximize retrieval quality.\n"
         "Infer the domain from the question.\n"
         "Prefer keyword-style search queries over full natural-language questions.\n"
@@ -36,10 +41,10 @@ def generate_search_queries(
         "sql query tuning indexing explain analyze\n"
         "postgres query optimization guide\n\n"
         "User question: is Snowflake losing customers?\n"
-        "Snowflake customer churn 2026\n"
-        "Snowflake customer count quarterly results 2026\n"
-        "Snowflake revenue growth customers 2026\n"
-        "analyst report Snowflake demand trends 2026\n\n"
+        f"Snowflake customer churn {date.today().year}\n"
+        f"Snowflake customer count quarterly results {date.today().year}\n"
+        f"Snowflake revenue growth customers {date.today().year}\n"
+        f"analyst report Snowflake demand trends {date.today().year}\n\n"
         f"User question: {question}\n"
     )
     raw_output = model(planner_prompt)
