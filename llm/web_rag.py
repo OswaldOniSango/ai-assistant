@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import date
 from typing import Callable
 
 from llm.context_builder import build_search_context
@@ -93,6 +94,8 @@ class WebRagPipeline:
     def _build_answer_prompt(self, question: str, context: str) -> str:
         return (
             "You are a local AI assistant.\n"
+            f"Today's date is {date.today().isoformat()}. Use it to interpret "
+            "phrases like this year, this season, or recently.\n"
             "Answer the user question using only the provided context.\n"
             "If the context does not contain enough information to answer, "
             f"reply with exactly this single word and nothing else: {INSUFFICIENT_CONTEXT}\n"
