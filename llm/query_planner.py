@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+from typing import Callable
+
 from llm.qwen_runner import ask_model
 from tools.web_search.query_builder import finalize_queries, parse_query_lines
 
 
-def generate_search_queries(question: str, limit: int = 5) -> list[str]:
+def generate_search_queries(
+    question: str,
+    limit: int = 5,
+    model: Callable[[str], str] = ask_model,
+) -> list[str]:
     if not question.strip():
         raise ValueError("Question cannot be empty.")
 
@@ -36,6 +42,6 @@ def generate_search_queries(question: str, limit: int = 5) -> list[str]:
         "analyst report Snowflake demand trends 2026\n\n"
         f"User question: {question}\n"
     )
-    raw_output = ask_model(planner_prompt)
+    raw_output = model(planner_prompt)
     parsed_queries = parse_query_lines(raw_output)
     return finalize_queries(parsed_queries, fallback_query=question, limit=limit)

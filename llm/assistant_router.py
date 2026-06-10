@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from typing import Callable
 
 from llm.qwen_runner import ask_model
 
@@ -48,6 +49,9 @@ class RouterDecision:
 class AssistantRouter:
     """Use the local model to choose between web search and a local answer."""
 
+    def __init__(self, model: Callable[[str], str] = ask_model) -> None:
+        self.model = model
+
     def decide(self, question: str) -> RouterDecision:
         if not question.strip():
             raise ValueError("Question cannot be empty.")
@@ -55,7 +59,7 @@ class AssistantRouter:
         prompt = ROUTER_PROMPT_TEMPLATE.replace("{question}", question)
 
         try:
-            raw_output = ask_model(prompt)
+            raw_output = self.model(prompt)
         except Exception:
             # If the model fails, searching too much is better than inventing.
             return RouterDecision(

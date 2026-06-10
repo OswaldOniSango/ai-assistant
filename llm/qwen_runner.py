@@ -112,10 +112,3 @@ def build_direct_answer_prompt(user_prompt: str) -> str:
         f"User question: {user_prompt}\n\n"
         "Answer:"
     )
-
-
-class QwenRunner:
-    """Small adapter that keeps chat code decoupled from the local backend."""
-
-    def generate(self, prompt: str) -> str:
-        return ask_model(build_direct_answer_prompt(prompt))
