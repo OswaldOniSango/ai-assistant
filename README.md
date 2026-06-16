@@ -47,6 +47,8 @@ CLI mode:
 
 ```bash
 python3 main.py chat "Explain what Snowflake is"
+python3 main.py search-answer "Who is Aaron Judge?"
+python3 main.py project-answer "Explain how search-answer works"
 ```
 
 Interactive mode:
