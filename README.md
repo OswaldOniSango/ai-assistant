@@ -27,6 +27,14 @@ Example:
 export QWEN_MODEL_PATH="/path/to/model/qwen.gguf"
 ```
 
+Optional generation settings:
+
+```bash
+export QWEN_MAX_TOKENS=1024
+export QWEN_CONTEXT_SIZE=32768
+export QWEN_THREADS=8
+```
+
 Automatically detected path in this environment:
 
 ```bash

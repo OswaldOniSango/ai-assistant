@@ -19,6 +19,7 @@ else:
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 MODELS_DIR = PROJECT_ROOT / "models"
 HOME_MODELS_DIR = Path.home() / "local-ai-workspace" / "models"
+DEFAULT_MAX_TOKENS = 512
 
 
 def _resolve_model_path() -> Path:
@@ -75,30 +76,44 @@ def ask_model(prompt: str) -> str:
         raise ValueError("Prompt cannot be empty.")
 
     model = _load_model()
+    max_tokens = _max_tokens()
+    final_prompt = build_direct_answer_prompt(prompt)
 
     try:
         response = model.create_chat_completion(
             messages=[
                 {
                     "role": "user",
-                    "content": prompt,
+                    "content": final_prompt,
                 }
             ],
             temperature=0.2,
-            max_tokens=256,
+            max_tokens=max_tokens,
         )
         message = response["choices"][0]["message"]["content"]
         return message.strip()
     except Exception:
-        fallback_prompt = f"User: {prompt}\nAssistant:"
         response = model.create_completion(
-            prompt=fallback_prompt,
+            prompt=final_prompt,
             temperature=0.2,
-            max_tokens=256,
-            stop=["User:", "\n\nUser:"],
+            max_tokens=max_tokens,
+            stop=["User question:", "\n\nUser question:"],
         )
         text = response["choices"][0]["text"]
         return text.strip()
+
+
+def _max_tokens() -> int:
+    raw_value = os.getenv("QWEN_MAX_TOKENS", str(DEFAULT_MAX_TOKENS))
+    try:
+        max_tokens = int(raw_value)
+    except ValueError as exc:
+        raise ValueError("QWEN_MAX_TOKENS must be an integer.") from exc
+
+    if max_tokens < 1:
+        raise ValueError("QWEN_MAX_TOKENS must be greater than zero.")
+
+    return max_tokens
 
 
 def build_direct_answer_prompt(user_prompt: str) -> str:
