@@ -9,26 +9,43 @@ from .models import ProjectFile
 
 DEFAULT_EXCLUDED_DIRS = {
     ".git",
+    ".gradle",
+    ".idea",
     ".mypy_cache",
     ".pytest_cache",
     ".ruff_cache",
     ".venv",
     "__pycache__",
+    "build",
     "models",
     "node_modules",
+    "out",
+    "target",
     "venv",
 }
 DEFAULT_INCLUDED_EXTENSIONS = {
+    ".gradle",
     ".ini",
+    ".java",
     ".json",
     ".md",
+    ".properties",
     ".py",
     ".toml",
     ".txt",
+    ".xml",
     ".yaml",
     ".yml",
 }
 DEFAULT_MAX_FILE_BYTES = 80_000
+OVERVIEW_FILENAMES = {
+    "build.gradle",
+    "build.gradle.kts",
+    "pom.xml",
+    "readme.md",
+    "settings.gradle",
+    "settings.gradle.kts",
+}
 
 
 class ProjectReaderService:
@@ -46,6 +63,10 @@ class ProjectReaderService:
         if not question.strip():
             raise ValueError("Question cannot be empty.")
 
+        exact_paths = self._exact_filename_paths(question)
+        if exact_paths:
+            return self._read_project_files(exact_paths[:limit])
+
         scored_files: list[tuple[int, Path]] = []
         for path in self._iter_candidate_paths():
             score = self._score_path(question, path)
@@ -53,15 +74,30 @@ class ProjectReaderService:
                 scored_files.append((score, path))
 
         scored_files.sort(key=lambda item: (-item[0], str(item[1])))
-        selected_paths = [path for _, path in scored_files[:limit]]
+        if scored_files:
+            selected_paths = [path for _, path in scored_files[:limit]]
+        else:
+            selected_paths = self._overview_paths(limit)
 
-        files: list[ProjectFile] = []
-        for path in selected_paths:
-            project_file = self._read_project_file(path)
-            if project_file is not None:
-                files.append(project_file)
+        return self._read_project_files(selected_paths)
 
-        return files
+    def _exact_filename_paths(self, question: str) -> list[Path]:
+        requested_filenames = _requested_filenames(question)
+        if not requested_filenames:
+            return []
+
+        matches: list[Path] = []
+        for path in self._iter_candidate_paths():
+            if path.name.lower() in requested_filenames:
+                matches.append(path)
+
+        matches.sort(key=lambda path: path.relative_to(self.root).as_posix())
+        return matches
+
+    def _overview_paths(self, limit: int) -> list[Path]:
+        candidates = self._iter_candidate_paths()
+        candidates.sort(key=self._overview_sort_key)
+        return candidates[:limit]
 
     def _iter_candidate_paths(self) -> list[Path]:
         paths: list[Path] = []
@@ -122,6 +158,31 @@ class ProjectReaderService:
             content=content,
         )
 
+    def _read_project_files(self, paths: list[Path]) -> list[ProjectFile]:
+        files: list[ProjectFile] = []
+        for path in paths:
+            project_file = self._read_project_file(path)
+            if project_file is not None:
+                files.append(project_file)
+
+        return files
+
+    def _overview_sort_key(self, path: Path) -> tuple[int, str]:
+        relative_path = path.relative_to(self.root).as_posix()
+        filename = path.name.lower()
+        suffix = path.suffix.lower()
+
+        if filename in OVERVIEW_FILENAMES:
+            priority = 0
+        elif "/src/main/" in f"/{relative_path}" and suffix in {".java", ".py"}:
+            priority = 1
+        elif "/src/" in f"/{relative_path}" and suffix in {".java", ".py"}:
+            priority = 2
+        else:
+            priority = 3
+
+        return priority, relative_path
+
 
 def _tokens(text: str) -> set[str]:
     return {
@@ -131,12 +192,23 @@ def _tokens(text: str) -> set[str]:
     }
 
 
+def _requested_filenames(text: str) -> set[str]:
+    return {
+        match.lower()
+        for match in re.findall(r"\b[\w.-]+\.[A-Za-z0-9]+\b", text)
+    }
+
+
 def _language_for_extension(extension: str) -> str:
     return {
+        ".gradle": "gradle",
+        ".java": "java",
         ".json": "json",
         ".md": "markdown",
+        ".properties": "properties",
         ".py": "python",
         ".toml": "toml",
+        ".xml": "xml",
         ".yaml": "yaml",
         ".yml": "yaml",
     }.get(extension.lower(), "text")
