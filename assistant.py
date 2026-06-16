@@ -6,8 +6,10 @@ import logging
 from typing import Callable
 
 from llm.assistant_router import AssistantRouter
+from llm.project_rag import ProjectRagPipeline
 from llm.qwen_runner import ask_model, build_direct_answer_prompt
 from llm.web_rag import WebRagPipeline, is_insufficient_context
+from tools.project_reader import ProjectFile
 from tools.web_search import SearchResult
 
 logger = logging.getLogger(__name__)
@@ -20,11 +22,13 @@ class Assistant:
         self,
         router: AssistantRouter | None = None,
         web_pipeline: WebRagPipeline | None = None,
+        project_pipeline: ProjectRagPipeline | None = None,
         model: Callable[[str], str] = ask_model,
     ) -> None:
         self.model = model
         self.router = router or AssistantRouter(model=model)
         self.web_pipeline = web_pipeline or WebRagPipeline(model=model)
+        self.project_pipeline = project_pipeline or ProjectRagPipeline(model=model)
 
     def answer(self, question: str) -> str:
         """Route the question and answer it. Logs Decision: WEB or LOCAL."""
@@ -61,6 +65,19 @@ class Assistant:
 
         return _format_grounded_answer(answer, search_results[:3])
 
+    def answer_with_project_context(self, question: str) -> str:
+        if not question.strip():
+            raise ValueError("Question cannot be empty.")
+
+        answer, files = self.project_pipeline.answer_question(question)
+        if not files:
+            return (
+                "I do not have enough information in the project files to "
+                "answer with certainty."
+            )
+
+        return _format_project_answer(answer, files)
+
 
 def _format_grounded_answer(answer: str, sources: list[SearchResult]) -> str:
     if not sources:
@@ -71,3 +88,11 @@ def _format_grounded_answer(answer: str, sources: list[SearchResult]) -> str:
         for result in sources[:3]
     ]
     return f"{answer}\n\nSources:\n" + "\n".join(formatted_sources)
+
+
+def _format_project_answer(answer: str, files: list[ProjectFile]) -> str:
+    formatted_files = [
+        f"- {getattr(file, 'path', 'Unknown path')}"
+        for file in files[:5]
+    ]
+    return f"{answer}\n\nProject files:\n" + "\n".join(formatted_files)

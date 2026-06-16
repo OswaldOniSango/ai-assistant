@@ -42,6 +42,10 @@ def main(argv: list[str] | None = None) -> int:
             print(assistant.answer_with_web_context(argument))
             return 0
 
+        if command == "project-answer":
+            print(assistant.answer_with_project_context(argument))
+            return 0
+
         if command == "ask":
             print(assistant.answer(argument))
             return 0
