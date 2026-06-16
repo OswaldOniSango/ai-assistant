@@ -77,14 +77,13 @@ def ask_model(prompt: str) -> str:
 
     model = _load_model()
     max_tokens = _max_tokens()
-    final_prompt = build_direct_answer_prompt(prompt)
 
     try:
         response = model.create_chat_completion(
             messages=[
                 {
                     "role": "user",
-                    "content": final_prompt,
+                    "content": prompt,
                 }
             ],
             temperature=0.2,
@@ -94,7 +93,7 @@ def ask_model(prompt: str) -> str:
         return message.strip()
     except Exception:
         response = model.create_completion(
-            prompt=final_prompt,
+            prompt=prompt,
             temperature=0.2,
             max_tokens=max_tokens,
             stop=["User question:", "\n\nUser question:"],
@@ -116,16 +115,22 @@ def _max_tokens() -> int:
     return max_tokens
 
 
+def build_language_instruction(context_name: str = "supporting context") -> str:
+    return (
+        "First identify the language of the user's question. Do not mention this analysis.\n"
+        "Reply entirely in the same language as the user's question.\n"
+        f"The language of any {context_name} must not change the reply language.\n"
+        "If the question is in English, answer in English.\n"
+        "If the question is in Spanish, answer in Spanish.\n"
+    )
+
+
 def build_direct_answer_prompt(user_prompt: str) -> str:
     return (
         "You are a local AI assistant.\n"
         f"Today's date is {date.today().isoformat()}. Your training data is "
         "older than this date.\n"
-        "First identify the language of the user's question. Do not mention this analysis.\n"
-        "Reply entirely in the same language as the user's question.\n"
-        "The language of any supporting context must not change the reply language.\n"
-        "If the question is in English, answer in English.\n"
-        "If the question is in Spanish, answer in Spanish.\n"
+        f"{build_language_instruction()}"
         "If the answer depends on current events, live data, or anything that "
         "may have changed recently, do not guess: say you cannot verify it "
         "right now.\n"

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable
 
-from llm.qwen_runner import ask_model
+from llm.qwen_runner import ask_model, build_language_instruction
 from tools.project_reader import ProjectFile, ProjectReaderService
 
 
@@ -50,7 +50,7 @@ class ProjectRagPipeline:
             "If the question names a file, use the block whose Path matches that file.\n"
             "When the user asks for exact code details such as signatures, copy "
             "them from the provided Content instead of paraphrasing.\n"
-            "Reply entirely in the same language as the user's question.\n"
+            f"{build_language_instruction('project files')}"
             "Include the relevant file paths you used.\n\n"
             f"User question: {question}\n\n"
             "Project context:\n"

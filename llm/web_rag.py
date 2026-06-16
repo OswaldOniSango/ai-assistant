@@ -8,7 +8,7 @@ from itertools import zip_longest
 from typing import Callable
 
 from llm.context_builder import build_search_context
-from llm.qwen_runner import ask_model
+from llm.qwen_runner import ask_model, build_language_instruction
 from llm.query_planner import generate_search_queries
 from tools.web_search import RetrievedDocument, SearchResult, WebSearchService
 from tools.web_search.content_extractor import WebContentExtractor
@@ -149,11 +149,7 @@ class WebRagPipeline:
             "If the context does not contain enough information to answer, "
             f"reply with exactly this single word and nothing else: {INSUFFICIENT_CONTEXT}\n"
             "Do not invent facts.\n"
-            "First identify the language of the user's question. Do not mention this analysis.\n"
-            "Reply entirely in the same language as the user's question.\n"
-            "The language of the web context and sources must not change the reply language.\n"
-            "If the question is in English, answer in English.\n"
-            "If the question is in Spanish, answer in Spanish.\n"
+            f"{build_language_instruction('web context and sources')}"
             "Keep the answer brief and factual.\n\n"
             f"User question: {question}\n\n"
             "Web context:\n"
